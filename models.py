@@ -14,9 +14,10 @@ class Room(Base):
     price = Column(Integer, nullable=False)
     status = Column(Enum('booked', 'vacant', name='enum_options'), nullable=False)
 
-class Booked(Base):
-    __tablename__ = 'booked'
-    useremail = Column(String(30), nullable=False, primary_key=True)
+class Booking(Base):
+    __tablename__ = 'bookings'
+    id = Column(Integer, primary_key=True, index=True)  # Use an ID as primary key
+    useremail = Column(String(30), nullable=False)
     payment = Column(Enum('paid', 'unpaid', name='payment_status'), nullable=False, default='unpaid')
-    check_out = Column(DateTime, nullable=False, primary_key=True, default=lambda: datetime.utcnow() + timedelta(hours=12))
+    check_out = Column(DateTime, nullable=False, default=lambda: datetime.utcnow() + timedelta(hours=12))  # Default check-out time
 
