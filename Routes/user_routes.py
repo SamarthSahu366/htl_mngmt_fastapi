@@ -31,10 +31,7 @@ from sqlalchemy.orm import Session
 
 @router.post("/users/protected_route")
 def protected_route(token: str = Depends(reuseable_oath), db: Session = Depends(get_db)):
-    payload = jwt.decode(token, SECRET_KEY, algorithms='HS256')
-    token_data = TokenSchema(**payload) 
     token_email=verify_token(token,"access-token")
-    # print(token_email)
     user = db.query(User).filter(User.email == token_email).first()
     if user is None:
         raise HTTPException(
@@ -64,33 +61,23 @@ def signin_post(user: UserSchema, db: Session = Depends(get_db)):
     db.refresh(db_user)
     return db_user
 
-def verify_token(token: TokenSchema,token_type: str):
+def verify_token(token: str, token_type: str):
     try:
         if token_type == "access-token":
             payload = verify_access_token(token)
-            # print(payload)
         elif token_type == "refresh-token":
             payload = verify_refresh_token(token)
         else:
             raise HTTPException(status_code=400, detail="Invalid token type")
-        print(payload)
-        username = payload
-        # print(username)
-        if not username:
-            raise HTTPException(status_code=401, detail="Invalid token payload")
-        return username
-    except:
-        HTTPException(status_code=404, detail="user not found")
-        
-    
-                
+        return payload
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
+        
 def verify_access_token(token: TokenSchema):
     try:
-        # print(token) 
         payload = jwt.decode(token, SECRET_KEY, algorithms='HS256')
-        # print(payload)
-        email = payload.get("sub")
+        email = payload.get("email")
         if email is None:
             raise HTTPException(status_code=403, detail="Could not validate credentials")
         if datetime.utcnow() > datetime.utcfromtimestamp(payload["exp"]):
@@ -101,37 +88,41 @@ def verify_access_token(token: TokenSchema):
 
 def verify_refresh_token(token: TokenSchema):
     try:
-        payload = jwt.decode(token, REFRESH_SECRET_KEY, algorithms='HS256')
-        email = payload.get("sub")
-        if email is None:
-            raise HTTPException(status_code=403, detail="Could not validate credentials")
-        if datetime.utcnow() > datetime.utcfromtimestamp(payload["exp"]):
+        # print("Decoding refresh token...")
+        payload = jwt.decode(token, REFRESH_SECRET_KEY, algorithms=['HS256'])
+        # print(f"Decoded payload: {payload}")
+        email = payload.get("email")
+        print(email)
+        if not email:
+            raise HTTPException(status_code=403, detail="Invalid token payload: email not found")
+        exp = payload.get("exp")
+        if not exp or datetime.utcnow() > datetime.utcfromtimestamp(exp):
             raise HTTPException(status_code=403, detail="Token has expired")
         return email
-    except jwt.JWTError:
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=403, detail="Token has expired")
+    except jwt.JWTError as e:
+        print(f"JWTError: {e}")
         raise HTTPException(status_code=403, detail="Could not validate credentials")
 
+
 def generate_access_token(email: str):
-    expire_time = timedelta(hours=12)
     payload = {
         "email": email, 
         "exp": datetime.utcnow()+timedelta(hours=12),
-        "sub": "user_id_123"
+        "sub": "anything"
     }
     token = jwt.encode(payload,SECRET_KEY, algorithm='HS256')
     return token
 
-def create_access_token(data: dict, expires_delta: timedelta | None = None):
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
-    else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=15)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm='HS256')
-    return encoded_jwt
-
-
+def create_access_token(email: str):
+    payload = {
+        "email": email, 
+        "exp": datetime.utcnow()+timedelta(hours=12),
+        "sub": "anything"
+    }
+    token = jwt.encode(payload,REFRESH_SECRET_KEY, algorithm='HS256')
+    return token
 
 @router.post('/users/login')
 def login_post(user: UserLoginSchema, db: Session = Depends(get_db)):
@@ -143,7 +134,7 @@ def login_post(user: UserLoginSchema, db: Session = Depends(get_db)):
         db_user_pass = existing_user.password
         if bcrypt.checkpw(user_given_pass.encode('utf-8'), db_user_pass.encode('utf-8')):
             access_token = generate_access_token(user.email)
-            refresh_token = create_access_token(data={"email": user.email},expires_delta=timedelta(hours=refresh_token_expires))
+            refresh_token = create_access_token(user.email)
             return {"access_token": access_token,"refresh_token":refresh_token}
         else:
             raise HTTPException(status_code=504, detail="Incorrect password")

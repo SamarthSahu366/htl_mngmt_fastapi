@@ -8,10 +8,9 @@ from Routes.user_routes import verify_token
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 def admin_required(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    print(' iiidfofnfedfndfufafnofon')
     user = verify_token(token, "access-token")
     print(user)
-    if not user.is_admin:
+    if not user:
         raise HTTPException(status_code=403, detail="Not authorized to access this resource")
     return user
 
