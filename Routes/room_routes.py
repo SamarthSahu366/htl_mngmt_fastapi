@@ -39,7 +39,6 @@ def update_room(room: updateroomSchema, db: Session = Depends(get_db), user: Use
         room_to_update.price = room.price
     if room.status:
         room_to_update.status = room.status
-    
     db.commit()
     db.refresh(room_to_update)
     return {"message": "Room updated successfully", "room": room_to_update}
